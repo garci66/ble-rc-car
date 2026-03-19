@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MAXI-RC-CAR</title>
+    <meta name="viewport" content="width=device-width height=device-height initial-scale=1">
+    <link rel="icon" type="image/png" href="logo-pill-blubg.png">
+    <link rel="stylesheet" type="text/css" href="style.css">
+    <meta charset="UTF-8">
+    <link rel="manifest" href="/manifest.json">
+</head>
+<body>
+    <div class="topnav" id="topnav" style="background-color:#d13a30;">
+        <div class="batteryHolder"> 
+            <div class="battery" id="battery">
+                <div class="battery-level" id="batteryLevel" style="height:100%;"></div>
+                <div class="battery-text" id="batteryText">99</div>
+            </div>
+        </div>
+        <h1>MAXI-RC-CAR</h1>
+        <p class="white-label"><strong><span id="bleState" >Desconectado</span></strong><br/>
+            Ultimo dato: <span id="neighborTimestamp"></span> - hace <span id="neighborAge">#</span>s  
+        </p>
+
+    </div>
+    <div class="content">
+        <div class="card-grid">
+            <div class="card">
+                <p>
+                    <button id="connectBleButton" class="connectButton">Conectar</button>
+                    <button id="disconnectBleButton" class="disconnectButton">Desconectar</button>
+                </p>
+            </div>
+        </div>
+        <div class="card-grid">
+            <div class="card">
+                <p>
+                    <h2>Control GPIO 2</h2>
+                    <button id="onButton">ON</button>
+                    <button id="offButton">OFF</button>
+                </p>
+                <p>Last value sent: <span id="valueSent"></span></p>
+            </div>
+        </div>
+
+      
+        <div class="card-grid">   
+            <div class="card" id="healthCard">
+                <h2>Estado Equipo Local</h2>
+                <p class="reading"><span id="healthValueContainer">NaN</span></p>
+                <p class="gray-label">Ultimo dato: hace <span id="healthTimestamp"></span>s.</p>
+            </div>
+        </div>
+        <div class="card-grid">   
+            <div class="card" id="debugCard">
+                <h2>Debug</h2>
+                <p class="debug-reading hide"><span id="neighborValueContainer1">NaN</span></p>
+                <p class="debug-reading hide"><span id="neighborValueContainer2">NaN</span></p>
+                <p class="debug-reading hide"><span id="sfpContainer">NaN</span></p>
+            </div>
+        </div>
+    </div>
+    <div class="footer">
+        <p>(C) Mediatel S.A. 2025</p>
+    </div>
+</body>
+<script>
+    if ('serviceWorker' in navigator) {
+    navigator.serviceWorker
+        .register('/service-worker.js')
+        .then((registration) => {
+            console.log('Service Worker registered successfully:', registration);
+        })
+        .catch((error) => {
+            console.log('Service Worker registration failed:', error);
+        });
+    }
+
+    // Battery calc array
+    const rawBatteryArray=[
+        {'input':4.17836257309941,'output':100},
+        {'input':4.16471734892787,'output':99.0361542554794},
+        {'input':4.11695906432748,'output':96.5060591761127},
+        {'input':4.07943469785575,'output':92.8916376341603},
+        {'input':4.01803118908382,'output':88.4338510657524},
+        {'input':3.97027290448343,'output':84.0965452154095},
+        {'input':3.91910331384015,'output':79.1568357747413},
+        {'input':3.85769980506822,'output':74.0966456160079},
+        {'input':3.80994152046783,'output':68.5545325850142},
+        {'input':3.76559454191033,'output':64.4581881708015},
+        {'input':3.71442495126705,'output':59.6389594481983},
+        {'input':3.6803118908382,'output':55.6630957520507},
+        {'input':3.65302144249512,'output':51.4462706197733},
+        {'input':3.63255360623781,'output':45.5427154345845},
+        {'input':3.60867446393762,'output':39.8801216855252},
+        {'input':3.58820662768031,'output':34.6994508087272},
+        {'input':3.57456140350877,'output':30.1211835222539},
+        {'input':3.55750487329434,'output':26.8682041344971},
+        {'input':3.53021442495126,'output':22.4104175660888},
+        {'input':3.4995126705653,'output':18.5550345880063},
+        {'input':3.46198830409356,'output':14.2177287376636},
+        {'input':3.44152046783625,'output':13.0129215570126},
+        {'input':3.42105263157894,'output':9.51898073312524},
+        {'input':3.38352826510721,'output':6.86840493569369},
+        {'input':3.28460038986354,'output':4.21782913826214},
+        {'input':3.1345029239766,'output':2.53109908535097},
+        {'input':2.97076023391812,'output':1.20581118663495},
+        {'input':2.81384015594541,'output':0.482926878244673},
+        {'input':2.68421052631578,'output':0.12148472404904},
+        {'input':2.50341130604288,'output':0.00100400598397561},
+    ]
+    const sortedBattArray=rawBatteryArray.sort((a,b)=>a.input-b.input)
+
+    // DOM Elements
+    const connectButton = document.getElementById('connectBleButton');
+    const disconnectButton = document.getElementById('disconnectBleButton');
+    const topnavContainer = document.getElementById('topnav');
+    const bleStateContainer = document.getElementById('bleState');
+    const healthCard=document.getElementById('healthCard');
+    const healthRetrievedValue = document.getElementById('healthValueContainer');
+    const healtTimestampContainer = document.getElementById('healthTimestamp');
+
+    /*
+    dc0d7e72-826a-4c81-b9b6-fb41461d55be
+    33fca78f-326b-45a4-9dc0-530b2b299a01
+    cdd07708-8849-4b95-b1a8-8213c6392c4e
+    7cff3160-8b8f-4c5d-8667-e28737975334
+    4f3124a0-b7a5-451c-a8d4-aaf7ed7d575d
+    d24a2077-8b71-4f43-a5cf-113f945f1b89
+    */
+
+    //Define BLE Device Specs
+    var deviceNamePrefix ='Lado';
+    var bleService = 'dc0d7e72-826a-4c81-b9b6-fb41461d55be';
+    var ledCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214';
+    var neighborCharacteristic= 'f838f9d3-c86a-4ec8-a76b-424948fc82eb';
+    var healthCharacteristic= 'efd752ee-1439-4955-a3e2-b169e98d89f1';
+
+    //Global Variables to Handle Bluetooth
+    var bleServer;
+    var bleServiceFound;
+    var neighborCharacteristicFound;
+    var bleDeviceName;
+
+    //Timestamps
+    var lastNeighborTime=new Date();
+    var lastHealthTime=new Date();
+    var lastRemSfpTime=new Date();
+    var lastRemHealthTime=new Date();
+
+    document.getElementById('debugCard').addEventListener('click',e => {
+        document.querySelectorAll('.debug-reading').forEach(elm => elm.classList.toggle('hide'));
+    })
+
+    healthRemCard.addEventListener('click',e => {
+        document.getElementById('healthRem').classList.toggle('hide');
+    })
+
+
+    function setBatteryPct(pct){
+        batText=document.getElementById('batteryText');
+        batLevel=document.getElementById('batteryLevel');
+        pct=pct>100?100:pct;
+        pct=pct<0?0:pct;
+        batLevel.style.height=`${pct}%`;
+        batText.innerHTML=`${Math.round(pct)}`
+
+        if (pct<20){
+            if(pct<10){
+                batLevel.classList.remove('warn');
+                batLevel.classList.add('alert');
+            } else {
+                batLevel.classList.remove('alert');
+                batLevel.classList.add('warn');
+            }
+        } else {
+            batLevel.classList.remove('alert');
+            batLevel.classList.remove('warn');    
+        }
+    }
+
+    function approximateOutput(input, data) {
+        // data  is an array of size n with an input field and and output field. It must me sorted.    
+        // If the input is out of the bounds, return the lowest or highest value accordingly
+        if (input <= data[0].input) {
+            return data[0].output;
+        }
+        if (input >= data[data.length - 1].input) {
+            return data[data.length - 1].output;
+        }
+
+        // Iterate through the data to find the appropriate range
+        for (let i = 0; i < data.length - 1; i++) {
+            const point1 = data[i];
+            const point2 = data[i + 1];
+            
+            // Check if the input lies between point1 and point2
+            if (input >= point1.input && input <= point2.input) {
+                // Linear interpolation formula
+                const slope = (point2.output - point1.output) / (point2.input - point1.input);
+                const output = point1.output + slope * (input - point1.input);
+                return output;
+            }
+        }
+    }
+
+    function calcBatteryLevel(voltage){
+        //Takes the "voltage" value from the mikrotik health report and returns the battery charge percentage
+        packVoltage=(voltage+2.8834)/1.0611; //from tests ran - see excel in source code
+        cellVoltage=packVoltage/5; //5 cells per pack
+        chargePct = approximateOutput(cellVoltage, sortedBattArray);
+        console.debug(`BAT;TS:${getDateTime()};Raw Voltage:${voltage};pack voltage:${packVoltage};cell voltage:${cellVoltage};charge:${chargePct}`)
+        return chargePct
+    }
+
+    setInterval(function(){
+        if (bleServer && bleServer.connected){
+            if (delta>30){
+                topnavContainer.style.backgroundColor="#f8d300;"
+                bleStateContainer.innerHTML='Conectado a ' + bleDeviceName +"<br>NO SE RECIBEN DATOS<br>DESCONECTAR Y VOLVER A CONECTAR!"
+                resetNeighFormat()
+            } else {
+                topnavContainer.style.backgroundColor = "#24af37";
+                bleStateContainer.innerHTML='Conectado a ' + bleDeviceName;
+            }
+        } else {
+                topnavContainer.style.backgroundColor = "#d13a30";
+                bleStateContainer.innerHTML="DESCONECTADO!";
+                resetNeighFormat();
+                resetSFPFormat();
+        }
+        healthDelta=Math.round((new Date() - lastHealthTime)/1000)
+        healtTimestampContainer.innerHTML=healthDelta
+        if (healthDelta>90){
+            // Yellow background on health
+            healthCard.style.backgroundColor = '#fcff33';
+        } else {
+            healthCard.style.backgroundColor = '#ffffff';
+        }
+    },1000);
+
+    // Connect Button (search for BLE Devices only if BLE is available)
+    connectButton.addEventListener('click', (event) => {
+        if (isWebBluetoothEnabled()){
+            connectToDevice();
+        }
+    });
+
+    // Disconnect Button
+    disconnectButton.addEventListener('click', disconnectDevice);
+
+    // Write to the ESP32 LED Characteristic
+    onButton.addEventListener('click', () => writeOnCharacteristic(1));
+    offButton.addEventListener('click', () => writeOnCharacteristic(0));
+
+    // Check if BLE is available in your Browser
+    function isWebBluetoothEnabled() {
+        if (!navigator.bluetooth) {
+            console.log('Web Bluetooth API is not available in this browser!');
+            bleStateContainer.innerHTML = "Web Bluetooth API is not available in this browser/device!";
+            return false
+        }
+        console.log('Web Bluetooth API supported in this browser.');
+        return true
+    }
+
+    // Connect to BLE Device and Enable Notifications
+    function connectToDevice(){
+        console.log('Initializing Bluetooth...');
+        var myBlePrimaryService = navigator.bluetooth.requestDevice({
+            filters: [{namePrefix: deviceNamePrefix}],
+            optionalServices: [bleService]
+        })
+        .then(device => {
+            console.log('Device Selected:', device.name);
+            bleDeviceName=device.name;
+            lastNeighborTime=new Date();
+            bleStateContainer.innerHTML = 'Conectado a ' + bleDeviceName;
+            topnavContainer.style.backgroundColor = "#24af37";
+            device.addEventListener('gattservicedisconnected', onDisconnected);
+            return device.gatt.connect();
+        })
+        .then(gattServer =>{
+            bleServer = gattServer;
+            console.log("Connected to GATT Server");
+            return bleServer.getPrimaryService(bleService);
+        })
+
+        myBlePrimaryService.then(service => {
+            bleServiceFound = service;
+            console.log("Service discovered:", service.uuid);
+            return service.getCharacteristic(neighborCharacteristic);
+        })
+        .then(characteristic => {
+            console.log("Characteristic discovered:", characteristic.uuid);
+            neighborCharacteristicFound = characteristic;
+            characteristic.addEventListener('characteristicvaluechanged', handleNeighborCharacteristicChange);
+            characteristic.startNotifications();
+            console.log("Notifications Started.");
+            return characteristic.readValue();
+        })
+        .then(value => {
+            console.debug("Read value: ", value);
+            const decodedValue = new TextDecoder().decode(value);
+            console.debug("Decoded value: ", decodedValue);
+            //retrievedValue.innerHTML = decodedValue;            
+        })
+        .catch(error => {
+            console.log('Error: ', error);
+        });
+
+        // myBlePrimaryService.then(service => {
+        //     bleServiceFound = service;
+        //     console.log("Service discovered:", service.uuid);
+        //     return service.getCharacteristic(healthCharacteristic);
+        // })
+        // .then(characteristic => {
+        //     console.log("Characteristic discovered:", characteristic.uuid);
+        //     healthCharacteristicFound = characteristic;
+        //     characteristic.addEventListener('characteristicvaluechanged', handleHealthCharacteristicChange);
+        //     characteristic.startNotifications();
+        //     console.log("Notifications Started.");
+        //     return characteristic.readValue();
+        // })
+        // .then(value => {
+        //     console.log("Read value: ", value);
+        //     const decodedValue = new TextDecoder().decode(value);
+        //     console.log("Decoded value: ", decodedValue);
+        //     retrievedValue.innerHTML = decodedValue;            
+        // })
+        // .catch(error => {
+        //     console.log('Error: ', error);
+        // });
+
+    }
+
+    function onDisconnected(event){
+        console.log('Device Disconnected:', event.target.device.name);
+        bleStateContainer.innerHTML = "Dispositivo Desconectado";
+        topnavContainer.style.backgroundColor = "#d13a30";
+
+        connectToDevice();
+    }
+
+    function handleNeighborCharacteristicChange(event){
+        const newValueReceived = new TextDecoder().decode(event.target.value);
+        // TODO DEBUG
+        console.debug("Characteristic value changed: ", newValueReceived);
+        mkRespObj=JSON.parse(newValueReceived);
+        console.debug(newValueReceived);
+        if ('N' in mkRespObj){  //We're dealing with a Neighbor advertisement
+            thisObj=mkRespObj['N'];
+            for ( [key,val] of Object.entries(thisObj)){
+                    //console.log(key, val);
+                    localPort=document.getElementById(key)
+                    remPort=document.getElementById('n'+key)
+                    powPort=document.getElementById('p'+key)
+                    tempPort=document.getElementById('t'+key)
+                    ageVal=val['Z'==1]?"XXX":val['A']
+                    powerPortVal=`${(val['L']/10).toFixed(1)} dBm<br/>Antig ${ageVal} s.`
+                    powPort.innerHTML=powerPortVal;
+                    remPort.innerHTML=val['R'];
+                    if ('T' in val){
+                        tempPort.innerHTML=`${val['T']} &degc`
+                        if (val['T']>70){
+                            tempPort.style.backgroundColor = "#fcff33";
+                        } else {
+                            tempPort.style.backgroundColor = null;
+                        }
+                    } else {
+                        tempPort.style.backgroundColor = null;
+                        tempPort.innerHTML="NaN"
+                    }
+                    if ('M' in val && val['M']==0){
+                        // SFP not detected - alert!!
+                        localPort.style.backgroundColor = "#f633ff";
+                        powPort.innerHTML="ERR<br>SFP!!";
+                        remPort.innerHTML="ERR<br>SFP!!";
+                        tempPort.innerHTML="ERR!!";
+                    } else if ('F' in val && val['F']) {
+                        // TX Fault in SFP
+                        localPort.style.backgroundColor = "#f633ff";
+                        remPort.innerHTML="ERR<br>TX!!"
+                    } else if (val['S']==false){
+                        // Link down
+                        localPort.style.backgroundColor = "#8a8a8a";
+                    } else if (val['Z']==false){
+                        // Link up but no LLDP data
+                        remPort.innerHTML="S/D!"
+                        localPort.style.backgroundColor = "#fcff33";
+                    } else {
+                        if (key==val['R']){
+                            // LLDP PORT matches
+                            localPort.style.backgroundColor  = "#24af37";
+                        } else {
+                            // LLDP PORT MISMATCH
+                            localPort.style.backgroundColor = "#d13a30";
+                        }
+                    }
+
+                }
+            if ("NS" in mkRespObj){
+                // New format with sequence number (NS)
+                if (mkRespObj['NS']==1){
+                    neighboRetrievedValue1.innerHTML = newValueReceived;
+                } else {
+                    neighboRetrievedValue2.innerHTML = newValueReceived;
+                }
+            } else {
+                // old format without sequence number (NS)
+                neighboRetrievedValue1.innerHTML = newValueReceived;
+            }
+            
+            lastNeighborTime=new Date();
+            neighborTimestampContainer.innerHTML = getDateTime();
+        }
+        if ('R' in mkRespObj){  //We're dealing with a remote SFP info
+            thisObj=mkRespObj['R'];
+            for ( [key,val] of Object.entries(thisObj)){
+                    //console.log(key, val);
+                    localPort=document.getElementById('R'+key)
+                    powPort=document.getElementById('rS'+key)
+                    //show remote tx power and temperature
+                    powerPortVal=`${(val['L']/10).toFixed(1)} dBm<br/>${val['T']}&deg;C`
+                    powPort.innerHTML=powerPortVal;
+                    if ('M' in val && val['M']==0){
+                        // SFP not detected - alert!!
+                        localPort.style.backgroundColor = "#f633ff";
+                        powPort.innerHTML="ERR<br>SFP!!";
+                    } else if ('F' in val && val['F']) {
+                        // TX Fault in SFP
+                        localPort.style.backgroundColor = "#f633ff";
+                        powPort.innerHTML="ERR<br>TX!!"
+                    } else if ('T' in val && (val['T']>70 || val['T']<5) ) {
+                        // Out of temperature - waring
+                        localPort.style.backgroundColor = "#fcff33";
+                        powPort.innerHTML="ERR<br>TX!!"
+                    } else {
+                        // OK? 
+                        localPort.style.backgroundColor = "#24af37";
+                    }
+                }
+                sfpRetrievedValue.innerHTML = newValueReceived;
+            lastRemSfpTime=new Date();
+        }
+        if ("H" in mkRespObj){ //We're dealing with a  Health advertisement
+            thisObj=mkRespObj['H'];
+            innerHTML='';
+            for ( [key,val] of Object.entries(thisObj)){
+                innerHTML+=`${key} = ${val}<br/>`
+            }
+            if ('voltage' in thisObj){
+                innerHTML+=`Battery: ${Math.round(calcBatteryLevel(thisObj['voltage']))}%<br/>`;
+                setBatteryPct(calcBatteryLevel(thisObj['voltage']));
+            }
+            healthRetrievedValue.innerHTML=innerHTML;
+            lastHealthTime=new Date();
+        }
+        if ("HR" in mkRespObj){ //We're dealing with a  Health advertisement
+            thisObj=mkRespObj['HR'];
+            innerHTML='';
+            for ( [key,val] of Object.entries(thisObj)){
+                innerHTML+=`${key} = ${val}<br/>`
+            }
+            if ('voltage' in thisObj){
+                innerHTML+=`Battery: ${Math.round(calcBatteryLevel(thisObj['voltage']))}%<br/>`;
+            }
+            healthRemRetrievedValue.innerHTML=innerHTML;
+            lastRemHealthTime=new Date();
+        }
+    }
+
+    // function handleHealthCharacteristicChange(event){
+    //     const newValueReceived = new TextDecoder().decode(event.target.value);
+    //     console.log("Characteristic value changed: ", newValueReceived);
+    //     console.log(newValueReceived);
+    //     mkRespObj=JSON.parse(newValueReceived);
+    //     innerHTML='';
+    //     for ( [key,val] of Object.entries(mkRespObj)){
+    //         innerHTML+=`${key} = ${val}<br/>`
+    //     }
+    //     healthRetrievedValue.innerHTML=innerHTML;
+    //     healtTimestampContainer.innerHTML = getDateTime();
+    // }
+
+    function writeOnCharacteristic(value){
+        if (bleServer && bleServer.connected) {
+            bleServiceFound.getCharacteristic(ledCharacteristic)
+            .then(characteristic => {
+                console.log("Found the LED characteristic: ", characteristic.uuid);
+                const data = new Uint8Array([value]);
+                return characteristic.writeValue(data);
+            })
+            .then(() => {
+                latestValueSent.innerHTML = value;
+                console.log("Value written to LEDcharacteristic:", value);
+            })
+            .catch(error => {
+                console.error("Error writing to the LED characteristic: ", error);
+            });
+        } else {
+            console.error ("Bluetooth is not connected. Cannot write to characteristic.")
+            window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!")
+        }
+    }
+
+    function disconnectDevice() {
+        console.log("Disconnect Device.");
+        if (bleServer && bleServer.connected) {
+            if (neighborCharacteristicFound) {
+                neighborCharacteristicFound.stopNotifications()
+                    .then(() => {
+                        console.log("Notifications Stopped");
+                        return bleServer.disconnect();
+                    })
+                    .then(() => {
+                        console.log("Device Disconnected");
+                        bleStateContainer.innerHTML = "Dispositivo Desconectado";
+                        topnavContainer.style.backgroundColor = "#d13a30";
+
+                    })
+                    .catch(error => {
+                        console.log("An error occurred:", error);
+                    });
+            } else {
+                console.log("No characteristic found to disconnect.");
+            }
+        } else {
+            // Throw an error if Bluetooth is not connected
+            console.error("Bluetooth is not connected.");
+            window.alert("Bluetooth no esta conectado.")
+        }
+    }
+
+    function getDateTime() {
+        var currentdate = new Date();
+        //var day = ("00" + currentdate.getDate()).slice(-2); // Convert day to string and slice
+        //var month = ("00" + (currentdate.getMonth() + 1)).slice(-2);
+        //var year = currentdate.getFullYear();
+        //var hours = ("00" + currentdate.getHours()).slice(-2);
+        //var minutes = ("00" + currentdate.getMinutes()).slice(-2);
+        //var seconds = ("00" + currentdate.getSeconds()).slice(-2);
+        
+        //var datetime = day + "/" + month + "/" + year + " at " + hours + ":" + minutes + ":" + seconds;
+        return currentdate.toLocaleString();
+    }
+
+</script>
+
+</html>
