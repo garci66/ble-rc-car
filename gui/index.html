@@ -308,28 +308,28 @@
             console.log('Error: ', error);
         });
 
-        // myBlePrimaryService.then(service => {
-        //     bleServiceFound = service;
-        //     console.log("Service discovered:", service.uuid);
-        //     return service.getCharacteristic(healthCharacteristic);
-        // })
-        // .then(characteristic => {
-        //     console.log("Characteristic discovered:", characteristic.uuid);
-        //     healthCharacteristicFound = characteristic;
-        //     characteristic.addEventListener('characteristicvaluechanged', handleHealthCharacteristicChange);
-        //     characteristic.startNotifications();
-        //     console.log("Notifications Started.");
-        //     return characteristic.readValue();
-        // })
-        // .then(value => {
-        //     console.log("Read value: ", value);
-        //     const decodedValue = new TextDecoder().decode(value);
-        //     console.log("Decoded value: ", decodedValue);
-        //     retrievedValue.innerHTML = decodedValue;            
-        // })
-        // .catch(error => {
-        //     console.log('Error: ', error);
-        // });
+        myBlePrimaryService.then(service => {
+            bleServiceFound = service;
+            console.log("Service discovered:", service.uuid);
+            return service.getCharacteristic(healthCharacteristic);
+        })
+        .then(characteristic => {
+            console.log("Characteristic discovered:", characteristic.uuid);
+            healthCharacteristicFound = characteristic;
+            characteristic.addEventListener('characteristicvaluechanged', handleHealthCharacteristicChange);
+            characteristic.startNotifications();
+            console.log("Notifications Started.");
+            return characteristic.readValue();
+        })
+        .then(value => {
+            console.log("Read value: ", value);
+            const decodedValue = new TextDecoder().decode(value);
+            console.log("Decoded value: ", decodedValue);
+            retrievedValue.innerHTML = decodedValue;            
+        })
+        .catch(error => {
+            console.log('Error: ', error);
+        });
 
     }
 
@@ -469,18 +469,18 @@
         }
     }
 
-    // function handleHealthCharacteristicChange(event){
-    //     const newValueReceived = new TextDecoder().decode(event.target.value);
-    //     console.log("Characteristic value changed: ", newValueReceived);
-    //     console.log(newValueReceived);
-    //     mkRespObj=JSON.parse(newValueReceived);
-    //     innerHTML='';
-    //     for ( [key,val] of Object.entries(mkRespObj)){
-    //         innerHTML+=`${key} = ${val}<br/>`
-    //     }
-    //     healthRetrievedValue.innerHTML=innerHTML;
-    //     healtTimestampContainer.innerHTML = getDateTime();
-    // }
+    function handleHealthCharacteristicChange(event){
+        const newValueReceived = new TextDecoder().decode(event.target.value);
+        console.log("Characteristic value changed: ", newValueReceived);
+        console.log(newValueReceived);
+        mkRespObj=JSON.parse(newValueReceived);
+        innerHTML='';
+        for ( [key,val] of Object.entries(mkRespObj)){
+            innerHTML+=`${key} = ${val}<br/>`
+        }
+        healthRetrievedValue.innerHTML=innerHTML;
+        healtTimestampContainer.innerHTML = getDateTime();
+    }
 
     function writeOnCharacteristic(value){
         if (bleServer && bleServer.connected) {
